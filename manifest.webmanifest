@@ -1,10 +1,12 @@
 {
-  "name": "SIRA — Chemin d’aujourd’hui, avenir de demain",
-  "short_name": "SIRA",
-  "lang": "fr",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#050608",
-  "theme_color": "#07101b",
-  "description": "Site officiel de l’association SIRA."
+  "name":"SIRA — Chemin d’aujourd’hui, avenir de demain",
+  "short_name":"SIRA",
+  "lang":"fr",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#050608",
+  "theme_color":"#07101b",
+  "description":"Site officiel de l’association SIRA.",
+  "icons":[{"src":"assets/sira-logo.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
 }
