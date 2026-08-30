@@ -1,42 +1,38 @@
 # SIRA — Site officiel
 
-Site officiel responsive de l’association SIRA — **« Chemin d’aujourd’hui, avenir de demain »**.
+Site institutionnel responsive de l’association SIRA — **« Chemin d’aujourd’hui, avenir de demain »**.
 
-## Version actuelle
-- Accueil institutionnel responsive mobile / tablette / ordinateur
-- Identité visuelle SIRA et logo SVG
+## État actuel
+- Accueil institutionnel complet, responsive mobile / tablette / ordinateur
+- Identité visuelle SIRA intégrée à partir du logo officiel SVG
 - Navigation mobile accessible
-- Présentation des axes d’action
-- Vitrine projets, actualités et événements
-- Formulaire de contact avec validation et stockage local de test
-- Page d’adhésion / participation avec stockage local de test
-- Tableau de bord local de démonstration (`admin.html`)
-- Pages confidentialité, mentions légales et 404
-- Manifest PWA
+- Sections : présentation, domaines d’action, projets, impact, actualités, participation, contact et FAQ
+- Page d’adhésion / participation
+- Tableau de bord local de démonstration
+- Pages confidentialité et mentions légales préparatoires
+- Manifest PWA + service worker de cache
 - Workflow GitHub Pages
-- SEO de base : description, thème, sitemap et robots
+- Métadonnées SEO de base
 
 ## Arborescence
-- `index.html` — accueil
+- `index.html` — accueil institutionnel
 - `join.html` — adhésion / participation
 - `admin.html` — tableau de bord local de test
-- `styles.css` — design responsive
-- `app.js` — interactions, validation et stockage local
-- `assets/sira-logo.svg` — identité SIRA
+- `styles.css` — design responsive et composants
+- `app.js` — navigation, animations, validation et stockage local de prototype
+- `assets/sira-logo.svg` — logo officiel SIRA
 - `privacy.html` — confidentialité préparatoire
 - `legal.html` — mentions légales préparatoires
 - `404.html` — page introuvable
 - `manifest.webmanifest` — PWA
-- `robots.txt` / `sitemap.xml` — référencement
-- `.github/workflows/pages.yml` — déploiement continu
+- `sw.js` — cache offline de base
+- `.github/workflows/pages.yml` — publication GitHub Pages
 
-## Important avant production
-Les informations officielles de l’association (dénomination juridique complète, mission validée, dirigeants, adresse, téléphone, e-mail, réseaux sociaux, projets réels, partenaires et moyens de don/paiement) doivent être fournies et validées par SIRA. Aucun faux contact, faux partenaire ou faux moyen de paiement n’est intégré.
+## Données et sécurité
+Les coordonnées, dirigeants, projets, partenaires, moyens de don et autres informations institutionnelles non fournis par SIRA ne sont pas inventés. Les formulaires actuels utilisent `localStorage` uniquement pour démontrer le parcours frontend. **Ils ne constituent pas encore une base de données sécurisée et ne doivent pas servir à collecter des données sensibles en production.**
 
-Les formulaires actuels sont **un prototype frontend** : ils enregistrent les demandes dans `localStorage` du navigateur. Ils ne constituent pas encore une base de données membres et ne doivent pas être utilisés pour collecter des données sensibles en production.
+## Mise en production prévue
+La prochaine couche technique devra fournir une API sécurisée, une vraie base de données, une authentification administrateur avec rôles, un stockage des médias, la messagerie transactionnelle, la gestion des projets/actualités/événements, des journaux d’activité et un module de dons après validation des moyens de paiement de SIRA.
 
 ## Déploiement
-Le workflow GitHub Pages est prêt. Dans le dépôt GitHub, activer **Settings → Pages → Source: GitHub Actions**. Une fois Pages autorisé, chaque push sur `main` déclenche la publication.
-
-## Prochaine étape technique
-Pour une vraie production : connecter une API sécurisée + base de données, authentification administrateur avec rôles, stockage médias, messagerie transactionnelle, gestion des projets/actualités/événements et module de dons après validation des moyens de paiement de SIRA.
+Le workflow GitHub Pages est présent. Dans GitHub : **Settings → Pages → Source: GitHub Actions**. Les changements poussés sur `main` peuvent ensuite être publiés automatiquement par le workflow.
