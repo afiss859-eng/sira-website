@@ -7,24 +7,36 @@ Site officiel responsive de l’association SIRA — **« Chemin d’aujourd’h
 - Identité visuelle SIRA et logo SVG
 - Navigation mobile accessible
 - Présentation des axes d’action
-- Vitrine projets et actualités prête pour les contenus officiels
-- Formulaire de contact côté interface avec préparation/copie du message
-- Pages confidentialité et mentions légales de base
+- Vitrine projets, actualités et événements
+- Formulaire de contact avec validation et stockage local de test
+- Page d’adhésion / participation avec stockage local de test
+- Tableau de bord local de démonstration (`admin.html`)
+- Pages confidentialité, mentions légales et 404
 - Manifest PWA
-- Déploiement automatique GitHub Pages via `.github/workflows/pages.yml`
+- Workflow GitHub Pages
+- SEO de base : description, thème, sitemap et robots
 
 ## Arborescence
 - `index.html` — accueil
-- `styles.css` — design, responsive, accessibilité
-- `app.js` — interactions et formulaire
+- `join.html` — adhésion / participation
+- `admin.html` — tableau de bord local de test
+- `styles.css` — design responsive
+- `app.js` — interactions, validation et stockage local
 - `assets/sira-logo.svg` — identité SIRA
-- `privacy.html` — confidentialité
-- `legal.html` — mentions légales
-- `manifest.webmanifest` — installation PWA
+- `privacy.html` — confidentialité préparatoire
+- `legal.html` — mentions légales préparatoires
+- `404.html` — page introuvable
+- `manifest.webmanifest` — PWA
+- `robots.txt` / `sitemap.xml` — référencement
 - `.github/workflows/pages.yml` — déploiement continu
 
-## À renseigner avant production
-Les informations officielles de l’association (dénomination juridique complète, mission validée, dirigeants, adresse, téléphone, e-mail, réseaux sociaux, projets réels, partenaires et moyens de don/paiement) doivent être fournies par SIRA. Aucun faux contact ou faux moyen de paiement n’est intégré.
+## Important avant production
+Les informations officielles de l’association (dénomination juridique complète, mission validée, dirigeants, adresse, téléphone, e-mail, réseaux sociaux, projets réels, partenaires et moyens de don/paiement) doivent être fournies et validées par SIRA. Aucun faux contact, faux partenaire ou faux moyen de paiement n’est intégré.
+
+Les formulaires actuels sont **un prototype frontend** : ils enregistrent les demandes dans `localStorage` du navigateur. Ils ne constituent pas encore une base de données membres et ne doivent pas être utilisés pour collecter des données sensibles en production.
 
 ## Déploiement
-Après activation de **Settings → Pages → GitHub Actions** dans le dépôt, chaque push sur `main` déclenche le workflow de publication.
+Le workflow GitHub Pages est prêt. Dans le dépôt GitHub, activer **Settings → Pages → Source: GitHub Actions**. Une fois Pages autorisé, chaque push sur `main` déclenche la publication.
+
+## Prochaine étape technique
+Pour une vraie production : connecter une API sécurisée + base de données, authentification administrateur avec rôles, stockage médias, messagerie transactionnelle, gestion des projets/actualités/événements et module de dons après validation des moyens de paiement de SIRA.
