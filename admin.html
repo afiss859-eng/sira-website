@@ -1,1 +1,36 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Administration — SIRA</title><link rel="icon" href="assets/sira-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"></head><body><header class="site-header"><a class="brand" href="index.html"><img src="assets/sira-logo.svg" alt="SIRA"></a><nav class="nav"><a href="index.html">Site public</a><a href="join.html">Adhésion</a></nav></header><main id="admin-app"><section class="contact section page-hero"><div class="section-label">Administration locale</div><h1>Centre de <em>suivi.</em></h1><p>Cette version est un tableau de bord de démonstration : les demandes sont stockées uniquement dans le navigateur utilisé. Elle ne remplace pas encore un espace administrateur sécurisé côté serveur.</p><div class="stats"><div><strong id="message-count">0</strong><span>Messages locaux</span></div><div><strong id="member-count">0</strong><span>Demandes d’adhésion</span></div><div><strong>—</strong><span>Backend à connecter</span></div></div><div class="admin-toolbar"><button id="clear-admin" class="btn primary" type="button">Effacer les données locales</button><a class="btn ghost-dark" href="index.html">Retour au site</a></div><div id="admin-list" class="admin-list"></div></section></main><footer><div class="footer-brand"><img src="assets/sira-logo.svg" alt="SIRA"><p>Administration SIRA</p></div><div><span>ATTENTION</span><p>Ne pas utiliser cette page comme système d’administration de production.</p></div></footer><script src="app.js" defer></script></body></html>
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Administration — SIRA</title><link rel="icon" href="assets/sira-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"></head><body><header class="site-header"><a class="brand" href="index.html"><img src="assets/sira-logo.svg" alt="SIRA"></a><nav class="nav"><a href="index.html">Site public</a><a href="join.html">Adhésion</a></nav></header><main id="admin-app"><section class="contact section page-hero"><div class="section-label">Administration SIRA</div><h1>Espace <em>administrateur.</em></h1><p>Connectez-vous avec l’adresse administratrice autorisée pour rédiger et publier les contenus du site. Les modifications sont enregistrées dans le dépôt SIRA et deviennent disponibles après le déploiement Vercel.</p><div class="admin-panel"><label>Compte administrateur<input id="admin-email" type="email" value="sawadogoafis125@gmail.com" readonly></label><label>Mot de passe<input id="admin-password" type="password" autocomplete="current-password" placeholder="Mot de passe administrateur"></label><button id="admin-login" class="btn primary" type="button">Ouvrir l’administration <span>→</span></button><p id="admin-status" class="form-note" role="status" aria-live="polite"></p></div><div id="editor" hidden><div class="section-head"><h2>Rédiger le <em>contenu.</em></h2><p>Les champs ci-dessous contrôlent les contenus éditables de la page publique.</p></div><div class="admin-editor"><label>Titre de l’actualité<input id="news-title"></label><label>Texte de l’actualité<textarea id="news-text" rows="5"></textarea></label><label>Titre du projet<input id="project-title"></label><label>Texte du projet<textarea id="project-text" rows="5"></textarea></label><button id="save-content" class="btn primary" type="button">Enregistrer et publier <span>→</span></button></div></div><div class="stats"><div><strong id="message-count">0</strong><span>Messages locaux</span></div><div><strong id="member-count">0</strong><span>Demandes locales</span></div><div><strong>✓</strong><span>Compte admin configuré</span></div></div><div id="admin-list" class="admin-list"></div></section></main><footer><div class="footer-brand"><img src="assets/sira-logo.svg" alt="SIRA"><p>Administration SIRA</p></div><div><span>COMPTE ADMIN</span><p>sawadogoafis125@gmail.com</p></div></footer><script src="app.js" defer></script><script>
+(() => {
+  const email = 'sawadogoafis125@gmail.com';
+  let auth = null;
+  const $ = id => document.getElementById(id);
+  const status = (text, type='info') => { $('admin-status').textContent = text; $('admin-status').dataset.state = type; };
+  const request = async (method, body) => {
+    const r = await fetch('/api/admin/content', { method, headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` }, body: body ? JSON.stringify(body) : undefined });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.ok) throw new Error(data.error || 'Erreur serveur');
+    return data;
+  };
+  $('admin-login').addEventListener('click', async () => {
+    const password = $('admin-password').value;
+    if (!password) return status('Entrez le mot de passe administrateur.', 'error');
+    auth = btoa(`${email}:${password}`);
+    try {
+      const data = await request('GET');
+      $('news-title').value = data.content.newsTitle || '';
+      $('news-text').value = data.content.newsText || '';
+      $('project-title').value = data.content.projectTitle || '';
+      $('project-text').value = data.content.projectText || '';
+      $('editor').hidden = false;
+      $('admin-password').value = '';
+      status('Connexion réussie. Vous pouvez maintenant rédiger.', 'success');
+    } catch (e) { auth = null; status('Connexion refusée : vérifiez le mot de passe administrateur.', 'error'); }
+  });
+  $('save-content').addEventListener('click', async () => {
+    if (!auth) return status('Connectez-vous d’abord.', 'error');
+    try {
+      await request('PUT', { newsTitle: $('news-title').value, newsText: $('news-text').value, projectTitle: $('project-title').value, projectText: $('project-text').value });
+      status('Contenu enregistré et publié dans le dépôt SIRA.', 'success');
+    } catch (e) { status('Enregistrement impossible : ' + e.message, 'error'); }
+  });
+})();
+</script></body></html>
