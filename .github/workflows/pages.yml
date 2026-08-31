@@ -26,15 +26,24 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Verify static site
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f styles.css
+          test -f app.js
+          test -f assets/sira-logo.svg
+          echo "SIRA static site files verified."
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
+          retention-days: 7
 
       - name: Deploy to GitHub Pages
         id: deployment
