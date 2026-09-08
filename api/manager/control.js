@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
-import { neon } from '@neondatabase/serverless';
 
+const REPO = 'afiss859-eng/sira-website';
+const STORE_PATH = 'data/manager-control.json';
 const EMAIL = process.env.ADMIN_EMAIL || 'sawadogoafis125@gmail.com';
 
 function adminAuthorized(req) {
@@ -13,154 +14,120 @@ function adminAuthorized(req) {
   } catch { return false; }
 }
 
-function hash(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
-
+function hash(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
 function makeLicenseKey() {
   const raw = crypto.randomBytes(12).toString('hex').toUpperCase();
   return `SIRA-MGR-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
 }
-
-function makeDeviceToken() {
-  return crypto.randomBytes(32).toString('base64url');
+function githubHeaders() {
+  if (!process.env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN manquant.');
+  return { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
 }
+function storeUrl() { return `https://api.github.com/repos/${REPO}/contents/${STORE_PATH}`; }
 
-async function ensureSchema(sql) {
-  await sql`CREATE TABLE IF NOT EXISTS sira_manager_licenses (
-    id BIGSERIAL PRIMARY KEY,
-    license_key TEXT UNIQUE NOT NULL,
-    merchant_name TEXT NOT NULL DEFAULT 'Commerce SIRA',
-    shop_name TEXT NOT NULL DEFAULT 'SIRA Business',
-    status TEXT NOT NULL DEFAULT 'ACTIVE',
-    max_users INTEGER NOT NULL DEFAULT 1,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS sira_manager_devices (
-    device_id TEXT PRIMARY KEY,
-    license_key TEXT NOT NULL REFERENCES sira_manager_licenses(license_key) ON DELETE CASCADE,
-    device_token_hash TEXT UNIQUE NOT NULL,
-    app_version TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'ACTIVE',
-    last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS sira_manager_commands (
-    id BIGSERIAL PRIMARY KEY,
-    device_id TEXT NOT NULL,
-    command TEXT NOT NULL,
-    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    status TEXT NOT NULL DEFAULT 'PENDING',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    delivered_at TIMESTAMPTZ NULL
-  )`;
+async function readStore() {
+  const r = await fetch(storeUrl(), { headers: githubHeaders(), cache: 'no-store' });
+  if (r.status === 404) return { data: { version: 1, licenses: [] }, sha: null };
+  if (!r.ok) throw new Error(`GitHub GET ${r.status}`);
+  const file = await r.json();
+  return { data: JSON.parse(Buffer.from(file.content, 'base64').toString('utf8')), sha: file.sha };
 }
-
-async function validateDevice(sql, key, deviceId, appVersion = '') {
-  const rows = await sql`SELECT license_key, merchant_name, shop_name, status, max_users, expires_at FROM sira_manager_licenses WHERE license_key=${key} LIMIT 1`;
-  if (!rows.length) return { valid: false, error: 'Clé de licence inconnue.' };
-  const lic = rows[0];
-  const expired = lic.expires_at && new Date(lic.expires_at).getTime() < Date.now();
-  if (expired) return { valid: false, expired: true, error: 'Licence expirée.' };
-  if (lic.status !== 'ACTIVE') return { valid: false, revoked: true, error: `Licence ${lic.status.toLowerCase()}.` };
-  if (!deviceId) return { valid: false, error: 'Identifiant appareil manquant.' };
-
-  const existing = await sql`SELECT device_id, device_token_hash FROM sira_manager_devices WHERE device_id=${deviceId} LIMIT 1`;
-  let token;
-  if (existing.length) {
-    const sameLicense = existing[0].license_key === key;
-    if (!sameLicense) return { valid: false, error: 'Cet appareil est déjà lié à une autre licence.' };
-    token = null;
-    await sql`UPDATE sira_manager_devices SET app_version=${appVersion}, status='ACTIVE', last_seen=NOW() WHERE device_id=${deviceId}`;
-  } else {
-    const countRows = await sql`SELECT COUNT(*)::int AS count FROM sira_manager_devices WHERE license_key=${key} AND status='ACTIVE'`;
-    if (countRows[0].count >= lic.max_users) return { valid: false, error: 'Quota d’appareils de la licence atteint.' };
-    token = makeDeviceToken();
-    await sql`INSERT INTO sira_manager_devices(device_id, license_key, device_token_hash, app_version) VALUES (${deviceId}, ${key}, ${hash(token)}, ${appVersion})`;
-  }
-
-  const commands = await sql`SELECT id, command, payload FROM sira_manager_commands WHERE device_id=${deviceId} AND status='PENDING' ORDER BY id ASC LIMIT 20`;
-  return {
-    valid: true,
-    license: {
-      key: lic.license_key,
-      merchantName: lic.merchant_name,
-      shopName: lic.shop_name,
-      maxUsers: lic.max_users,
-      usedCount: 1,
-      status: lic.status,
-      expiresAt: lic.expires_at,
-      deviceToken: token || undefined,
-      remoteMessage: null
-    },
-    commands
-  };
+async function writeStore(data, sha, message) {
+  const body = { message, content: Buffer.from(JSON.stringify(data, null, 2) + '\n', 'utf8').toString('base64'), branch: 'main' };
+  if (sha) body.sha = sha;
+  const r = await fetch(storeUrl(), { method: 'PUT', headers: { ...githubHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`GitHub PUT ${r.status}: ${await r.text()}`);
 }
+function normalize(data) { return { version: 1, licenses: Array.isArray(data?.licenses) ? data.licenses : [] }; }
 
 export default async function handler(req, res) {
-  if (!process.env.DATABASE_URL) return res.status(503).json({ ok: false, error: 'DATABASE_URL manquant sur Vercel.' });
-  const sql = neon(process.env.DATABASE_URL);
   try {
-    await ensureSchema(sql);
     const action = String(req.query?.action || 'overview');
 
+    // Endpoint used by the APK. Only the licence key and device id are needed;
+    // administrator credentials never enter the Android app.
     if (action === 'validate' && req.method === 'POST') {
       const { key, deviceId, appVersion } = req.body || {};
-      const result = await validateDevice(sql, String(key || '').trim(), String(deviceId || '').trim(), String(appVersion || '').trim());
-      return res.status(result.valid ? 200 : 401).json(result);
-    }
+      const licenseKey = String(key || '').trim();
+      const did = String(deviceId || '').trim();
+      if (!licenseKey || !did) return res.status(400).json({ valid: false, error: 'Clé ou identifiant appareil manquant.' });
+      const current = await readStore();
+      const data = normalize(current.data);
+      const lic = data.licenses.find(x => x.licenseKey === licenseKey);
+      if (!lic) return res.status(401).json({ valid: false, error: 'Clé de licence inconnue.' });
+      if (lic.expiresAt && new Date(lic.expiresAt).getTime() < Date.now()) return res.status(401).json({ valid: false, expired: true, error: 'Licence expirée.' });
+      if (lic.status !== 'ACTIVE') return res.status(401).json({ valid: false, revoked: true, error: `Licence ${String(lic.status).toLowerCase()}.` });
 
-    if (action === 'heartbeat' && req.method === 'POST') {
-      const token = String(req.headers['x-sira-device-token'] || '');
-      if (!token) return res.status(401).json({ ok: false, error: 'Jeton appareil manquant.' });
-      const device = await sql`SELECT device_id, license_key, status FROM sira_manager_devices WHERE device_token_hash=${hash(token)} LIMIT 1`;
-      if (!device.length || device[0].status !== 'ACTIVE') return res.status(401).json({ ok: false, blocked: true, error: 'Appareil bloqué.' });
-      const { appVersion = '' } = req.body || {};
-      await sql`UPDATE sira_manager_devices SET last_seen=NOW(), app_version=${String(appVersion)} WHERE device_id=${device[0].device_id}`;
-      const lic = await sql`SELECT status, expires_at FROM sira_manager_licenses WHERE license_key=${device[0].license_key} LIMIT 1`;
-      if (!lic.length || lic[0].status !== 'ACTIVE') return res.status(401).json({ ok: false, blocked: true, error: 'Licence désactivée.' });
-      const commands = await sql`SELECT id, command, payload FROM sira_manager_commands WHERE device_id=${device[0].device_id} AND status='PENDING' ORDER BY id ASC LIMIT 20`;
-      return res.status(200).json({ ok: true, blocked: false, nextPollSeconds: 60, commands });
+      const devices = Array.isArray(lic.deviceIds) ? lic.deviceIds : [];
+      if (!devices.includes(did)) {
+        if (devices.length >= Math.max(1, Number(lic.maxUsers) || 1)) return res.status(401).json({ valid: false, error: 'Quota d’appareils atteint.' });
+        lic.deviceIds = [...devices, did];
+        lic.lastSeenAt = new Date().toISOString();
+        lic.lastAppVersion = String(appVersion || '');
+        await writeStore(data, current.sha, `manager: register device ${did} on ${licenseKey}`);
+      }
+
+      return res.status(200).json({
+        valid: true,
+        license: {
+          key: lic.licenseKey,
+          merchantName: lic.merchantName,
+          shopName: lic.shopName,
+          maxUsers: lic.maxUsers,
+          usedCount: (lic.deviceIds || []).length,
+          status: lic.status,
+          expiresAt: lic.expiresAt || null,
+          themeColor: lic.themeColor || '#007AFF',
+          appName: lic.appName || 'SIRA Business',
+          logoUrl: lic.logoUrl || '',
+          bgUrl: lic.bgUrl || '',
+          cguText: lic.cguText || '',
+          privacyText: lic.privacyText || ''
+        },
+        commands: Array.isArray(lic.commands) ? lic.commands : []
+      });
     }
 
     if (!adminAuthorized(req)) return res.status(401).json({ ok: false, error: 'Authentification administrateur requise.' });
 
+    const current = await readStore();
+    const data = normalize(current.data);
+
     if (req.method === 'GET') {
-      const licenses = await sql`SELECT license_key AS "licenseKey", merchant_name AS "merchantName", shop_name AS "shopName", status, max_users AS "maxUsers", created_at AS "createdAt", expires_at AS "expiresAt" FROM sira_manager_licenses ORDER BY created_at DESC`;
-      const devices = await sql`SELECT device_id AS "deviceId", license_key AS "licenseKey", app_version AS "appVersion", status, last_seen AS "lastSeen", created_at AS "createdAt" FROM sira_manager_devices ORDER BY last_seen DESC`;
-      const commands = await sql`SELECT id, device_id AS "deviceId", command, payload, status, created_at AS "createdAt", delivered_at AS "deliveredAt" FROM sira_manager_commands ORDER BY created_at DESC LIMIT 100`;
-      return res.status(200).json({ ok: true, counts: { licenses: licenses.length, devices: devices.length, pendingCommands: commands.filter(c => c.status === 'PENDING').length }, licenses, devices, commands });
+      const licenses = data.licenses.map(x => ({ ...x, deviceIds: Array.isArray(x.deviceIds) ? x.deviceIds : [], commands: Array.isArray(x.commands) ? x.commands : [] }));
+      const devices = licenses.flatMap(x => (x.deviceIds || []).map(deviceId => ({ deviceId, licenseKey: x.licenseKey, merchantName: x.merchantName, shopName: x.shopName, appVersion: x.lastAppVersion || '', status: x.status, lastSeen: x.lastSeenAt || null })));
+      const commands = licenses.flatMap(x => (x.commands || []).map(c => ({ ...c, licenseKey: x.licenseKey })));
+      return res.status(200).json({ ok: true, counts: { licenses: licenses.length, devices: devices.length, pendingCommands: commands.length }, licenses, devices, commands });
     }
 
-    const body = req.body || {};
     if (action === 'create-license') {
       const key = makeLicenseKey();
-      await sql`INSERT INTO sira_manager_licenses(license_key, merchant_name, shop_name, max_users, expires_at) VALUES (${key}, ${String(body.merchantName || 'Commerce SIRA').slice(0,160)}, ${String(body.shopName || 'SIRA Business').slice(0,160)}, ${Math.max(1, Math.min(50, Number(body.maxUsers) || 1))}, ${body.expiresAt ? new Date(body.expiresAt).toISOString() : null})`;
+      data.licenses.unshift({ licenseKey: key, merchantName: String(req.body?.merchantName || 'Commerce SIRA').slice(0, 160), shopName: String(req.body?.shopName || 'SIRA Business').slice(0, 160), status: 'ACTIVE', maxUsers: Math.max(1, Math.min(50, Number(req.body?.maxUsers) || 1)), expiresAt: req.body?.expiresAt ? new Date(req.body.expiresAt).toISOString() : null, createdAt: new Date().toISOString(), deviceIds: [], commands: [] });
+      await writeStore(data, current.sha, `manager: create license ${key}`);
       return res.status(201).json({ ok: true, licenseKey: key });
     }
 
     if (action === 'set-license-status') {
-      const status = ['ACTIVE', 'SUSPENDED', 'REVOKED'].includes(body.status) ? body.status : null;
-      if (!status || !body.licenseKey) return res.status(400).json({ ok: false, error: 'Statut ou licence invalide.' });
-      await sql`UPDATE sira_manager_licenses SET status=${status}, updated_at=NOW() WHERE license_key=${String(body.licenseKey)}`;
+      const status = ['ACTIVE', 'SUSPENDED', 'REVOKED'].includes(req.body?.status) ? req.body.status : null;
+      const key = String(req.body?.licenseKey || '');
+      const lic = data.licenses.find(x => x.licenseKey === key);
+      if (!status || !lic) return res.status(400).json({ ok: false, error: 'Licence ou statut invalide.' });
+      lic.status = status;
+      lic.updatedAt = new Date().toISOString();
+      await writeStore(data, current.sha, `manager: set ${key} status ${status}`);
       return res.status(200).json({ ok: true, status });
     }
 
     if (action === 'command') {
-      const deviceId = String(body.deviceId || '');
-      const command = ['LOCK_APP', 'FORCE_SYNC', 'SHOW_MESSAGE'].includes(body.command) ? body.command : null;
-      if (!deviceId || !command) return res.status(400).json({ ok: false, error: 'Commande invalide.' });
-      const inserted = await sql`INSERT INTO sira_manager_commands(device_id, command, payload) VALUES (${deviceId}, ${command}, ${JSON.stringify(body.payload || {})}::jsonb) RETURNING id`;
-      return res.status(201).json({ ok: true, id: inserted[0].id });
-    }
-
-    if (action === 'ack') {
-      const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Number.isInteger) : [];
-      if (!ids.length) return res.status(400).json({ ok: false, error: 'Aucun identifiant de commande.' });
-      await sql`UPDATE sira_manager_commands SET status='DONE', delivered_at=NOW() WHERE id = ANY(${ids})`;
-      return res.status(200).json({ ok: true });
+      const deviceId = String(req.body?.deviceId || '');
+      const command = ['LOCK_APP', 'FORCE_SYNC', 'SHOW_MESSAGE'].includes(req.body?.command) ? req.body.command : null;
+      const lic = data.licenses.find(x => Array.isArray(x.deviceIds) && x.deviceIds.includes(deviceId));
+      if (!deviceId || !command || !lic) return res.status(400).json({ ok: false, error: 'Appareil ou commande invalide.' });
+      lic.commands = Array.isArray(lic.commands) ? lic.commands : [];
+      lic.commands.push({ id: hash(`${deviceId}:${Date.now()}:${command}`).slice(0, 16), command, payload: req.body?.payload || {}, createdAt: new Date().toISOString() });
+      if (command === 'LOCK_APP') lic.status = 'SUSPENDED';
+      await writeStore(data, current.sha, `manager: ${command} for ${deviceId}`);
+      return res.status(201).json({ ok: true });
     }
 
     return res.status(400).json({ ok: false, error: 'Action inconnue.' });
