@@ -23,33 +23,17 @@ function normalizeModel(value) {
 }
 function capabilities(model) {
   const base = {
-    barcode: true,
-    stock: true,
-    sales: true,
-    purchases: true,
-    customers: true,
-    suppliers: true,
-    proforma: true,
-    offline: true,
-    bluetoothReceipt: true,
-    multiStore: false,
-    multiWarehouse: false,
-    locations: false,
-    transfers: false,
-    lots: false,
-    serialNumbers: false,
-    expiry: false,
-    fifo: false,
-    fefo: false,
-    replenishment: false,
-    forecasting: false,
-    international: false,
-    multiCurrency: false,
-    landedCost: false
+    barcode: true, stock: true, sales: true, purchases: true, customers: true, suppliers: true,
+    proforma: true, offline: true, bluetoothReceipt: true,
+    multiStore: false, multiWarehouse: false, locations: false, transfers: false,
+    lots: false, serialNumbers: false, expiry: false, fifo: false, fefo: false,
+    replenishment: false, forecasting: false, international: false, multiCurrency: false, landedCost: false
   };
-  if (model === 'NATIONAL' || model === 'INTERNATIONAL') {
-    Object.assign(base, { multiStore: true, multiWarehouse: true, locations: true, transfers: true, lots: true, serialNumbers: true, expiry: true, fifo: true, fefo: true, replenishment: true, forecasting: true });
-  }
+  if (model === 'NATIONAL' || model === 'INTERNATIONAL') Object.assign(base, {
+    multiStore: true, multiWarehouse: true, locations: true, transfers: true,
+    lots: true, serialNumbers: true, expiry: true, fifo: true, fefo: true,
+    replenishment: true, forecasting: true
+  });
   if (model === 'INTERNATIONAL') Object.assign(base, { international: true, multiCurrency: true, landedCost: true });
   return base;
 }
@@ -79,7 +63,7 @@ async function callAI(model, messages) {
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Méthode non autorisée.' });
-    const { key, deviceId, query, context, model } = req.body || {};
+    const { key, deviceId, query, context } = req.body || {};
     if (!key || !deviceId || !String(query || '').trim()) return res.status(400).json({ ok: false, error: 'key, deviceId et query sont requis.' });
     const store = await readStore();
     const auth = findLicense(store, key, deviceId);
@@ -87,7 +71,7 @@ export default async function handler(req, res) {
 
     const lic = auth.lic;
     const stockModel = normalizeModel(lic.stockModel);
-    const selectedModel = String(model || lic.copilotModel || DEFAULT_MODEL);
+    const selectedModel = String(lic.copilotModel || DEFAULT_MODEL);
     const featureSet = capabilities(stockModel);
     const safeContext = context && typeof context === 'object' ? context : {};
     const system = `Tu es SIRA Copilote, assistant de gestion commerciale. Modèle SIRA: ${stockModel}. Ne propose que des actions compatibles avec ces capacités: ${JSON.stringify(featureSet)}. Réponds en français simple, orienté décision, sans jargon ERP. N'invente aucun chiffre: utilise uniquement les données fournies. Pour une action sensible (commande, modification massive, suppression, ajustement de stock, changement de prix), demande une confirmation explicite. Fais des recommandations adaptées à un commerçant au Burkina Faso et aux montants en FCFA.`;
