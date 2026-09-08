@@ -1,36 +1,185 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Administration — SIRA</title><link rel="icon" href="assets/sira-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"></head><body><header class="site-header"><a class="brand" href="index.html"><img src="assets/sira-logo.svg" alt="SIRA"></a><nav class="nav"><a href="index.html">Site public</a><a href="join.html">Adhésion</a></nav></header><main id="admin-app"><section class="contact section page-hero"><div class="section-label">Administration SIRA</div><h1>Espace <em>administrateur.</em></h1><p>Connectez-vous avec l’adresse administratrice autorisée pour rédiger et publier les contenus du site. Les modifications sont enregistrées dans le dépôt SIRA et deviennent disponibles après le déploiement Vercel.</p><div class="admin-panel"><label>Compte administrateur<input id="admin-email" type="email" value="sawadogoafis125@gmail.com" readonly></label><label>Mot de passe<input id="admin-password" type="password" autocomplete="current-password" placeholder="Mot de passe administrateur"></label><button id="admin-login" class="btn primary" type="button">Ouvrir l’administration <span>→</span></button><p id="admin-status" class="form-note" role="status" aria-live="polite"></p></div><div id="editor" hidden><div class="section-head"><h2>Rédiger le <em>contenu.</em></h2><p>Les champs ci-dessous contrôlent les contenus éditables de la page publique.</p></div><div class="admin-editor"><label>Titre de l’actualité<input id="news-title"></label><label>Texte de l’actualité<textarea id="news-text" rows="5"></textarea></label><label>Titre du projet<input id="project-title"></label><label>Texte du projet<textarea id="project-text" rows="5"></textarea></label><button id="save-content" class="btn primary" type="button">Enregistrer et publier <span>→</span></button></div></div><div class="stats"><div><strong id="message-count">0</strong><span>Messages locaux</span></div><div><strong id="member-count">0</strong><span>Demandes locales</span></div><div><strong>✓</strong><span>Compte admin configuré</span></div></div><div id="admin-list" class="admin-list"></div></section></main><footer><div class="footer-brand"><img src="assets/sira-logo.svg" alt="SIRA"><p>Administration SIRA</p></div><div><span>COMPTE ADMIN</span><p>sawadogoafis125@gmail.com</p></div></footer><script src="app.js" defer></script><script>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Administration — SIRA</title>
+<link rel="icon" href="assets/sira-logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:20px}
+  .admin-card{padding:20px;border:1px solid rgba(127,127,127,.16);border-radius:20px;background:rgba(255,255,255,.035)}
+  .admin-card h3{margin:0 0 8px}
+  .admin-card p{margin:0 0 14px;opacity:.75}
+  .admin-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .om-table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
+  .om-table th,.om-table td{text-align:left;padding:12px 8px;border-bottom:1px solid rgba(127,127,127,.14)}
+  .om-pill{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700}
+  .om-active{background:#dcfce7;color:#166534}.om-suspended{background:#fef3c7;color:#92400e}.om-revoked{background:#fee2e2;color:#991b1b}
+  .om-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+  .om-toolbar label{flex:1;min-width:160px}.om-toolbar button{white-space:nowrap}
+  .admin-hint{font-size:12px;opacity:.65;margin-top:8px}
+  @media (max-width:700px){.om-table{display:block;overflow:auto;white-space:nowrap}}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="index.html"><img src="assets/sira-logo.svg" alt="SIRA"></a>
+  <nav class="nav"><a href="index.html">Site public</a><a href="join.html">Adhésion</a></nav>
+</header>
+<main id="admin-app">
+<section class="contact section page-hero">
+  <div class="section-label">Centre de contrôle SIRA</div>
+  <h1>Espace <em>administrateur.</em></h1>
+  <p>Un seul centre pour le site SIRA, SIRA Business et SIRA Orange Money. Les accès opérateur restent séparés des commandes administrateur.</p>
+
+  <div class="admin-panel">
+    <label>Compte administrateur<input id="admin-email" type="email" value="sawadogoafis125@gmail.com" readonly></label>
+    <label>Mot de passe<input id="admin-password" type="password" autocomplete="current-password" placeholder="Mot de passe administrateur"></label>
+    <button id="admin-login" class="btn primary" type="button">Ouvrir l’administration <span>→</span></button>
+    <p id="admin-status" class="form-note" role="status" aria-live="polite"></p>
+  </div>
+
+  <div id="editor" hidden>
+    <div class="section-head"><h2>Contenu du <em>site.</em></h2><p>Actualité et projet publiés sur la page SIRA.</p></div>
+    <div class="admin-editor">
+      <label>Titre de l’actualité<input id="news-title"></label>
+      <label>Texte de l’actualité<textarea id="news-text" rows="5"></textarea></label>
+      <label>Titre du projet<input id="project-title"></label>
+      <label>Texte du projet<textarea id="project-text" rows="5"></textarea></label>
+      <button id="save-content" class="btn primary" type="button">Enregistrer et publier <span>→</span></button>
+    </div>
+
+    <div class="section-head" style="margin-top:48px">
+      <div><span class="eyebrow">Produit séparé</span><h2>SIRA <em>Orange Money.</em></h2></div>
+      <p>Licences indépendantes, activation par appareil, limites d’appareils, suspension/révocation, fonctionnalités et commandes distantes.</p>
+    </div>
+
+    <div class="admin-grid">
+      <div class="admin-card">
+        <h3>Créer une licence</h3>
+        <p>Génère une licence au format SIRA-OM-XXXX-XXXX-XXXX.</p>
+        <label>Nom du commerce<input id="om-merchant" value="Commerce SIRA"></label>
+        <label>Nom de l’application<input id="om-app" value="SIRA Orange Money"></label>
+        <label>Nombre maximal d’appareils<input id="om-devices" type="number" min="1" max="20" value="1"></label>
+        <label>Expiration<input id="om-expiry" type="datetime-local"></label>
+        <div class="admin-actions"><button id="om-create" class="btn primary" type="button">Créer la licence <span>→</span></button></div>
+        <p id="om-created" class="form-note" role="status"></p>
+      </div>
+      <div class="admin-card">
+        <h3>Commande appareil</h3>
+        <p>Verrouillage ou synchronisation à partir d’un appareil déjà activé.</p>
+        <label>Identifiant appareil<input id="om-device" placeholder="OM-DEV-..."></label>
+        <label>Commande<select id="om-command"><option value="LOCK_APP">Verrouiller l’application</option><option value="FORCE_SYNC">Forcer la synchronisation</option><option value="SHOW_MESSAGE">Afficher un message</option></select></label>
+        <label>Message<textarea id="om-payload" rows="2" placeholder="Optionnel pour SHOW_MESSAGE"></textarea></label>
+        <div class="admin-actions"><button id="om-send-command" class="btn primary" type="button">Envoyer la commande</button></div>
+        <p class="admin-hint">Une commande est enregistrée côté serveur et n’expose aucun secret de fournisseur dans l’APK.</p>
+      </div>
+    </div>
+
+    <div class="admin-card" style="margin-top:16px">
+      <div class="om-toolbar">
+        <label>Actualiser les licences</label>
+        <button id="om-refresh" class="btn primary" type="button">Actualiser</button>
+      </div>
+      <div id="om-list" class="admin-list" style="margin-top:10px"></div>
+    </div>
+  </div>
+</section>
+</main>
+<footer>
+  <div class="footer-brand"><img src="assets/sira-logo.svg" alt="SIRA"><p>Centre de contrôle SIRA</p></div>
+  <div><span>COMPTE ADMIN</span><p>sawadogoafis125@gmail.com</p></div>
+</footer>
+<script src="app.js" defer></script>
+<script>
 (() => {
   const email = 'sawadogoafis125@gmail.com';
   let auth = null;
   const $ = id => document.getElementById(id);
   const status = (text, type='info') => { $('admin-status').textContent = text; $('admin-status').dataset.state = type; };
-  const request = async (method, body) => {
-    const r = await fetch('/api/admin/content', { method, headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` }, body: body ? JSON.stringify(body) : undefined });
+  const api = async (path, method='GET', body) => {
+    const r = await fetch(path, { method, headers: { 'Content-Type':'application/json', Authorization:`Basic ${auth}` }, body: body ? JSON.stringify(body) : undefined });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok || !data.ok) throw new Error(data.error || 'Erreur serveur');
+    if (!r.ok || data.ok === false) throw new Error(data.error || `Erreur HTTP ${r.status}`);
     return data;
   };
+  const contentApi = (method='GET', body) => api('/api/admin/content', method, body);
+  const orangeApi = (action, method='GET', body) => api(`/api/manager/orange-money?action=${encodeURIComponent(action)}`, method, body);
+
+  function renderOrange(apps=[]) {
+    const root = $('om-list');
+    if (!apps.length) { root.innerHTML = '<p>Aucune licence Orange Money créée.</p>'; return; }
+    root.innerHTML = `<table class="om-table"><thead><tr><th>Licence</th><th>Commerce</th><th>État</th><th>Appareils</th><th>Actions</th></tr></thead><tbody>${apps.map((a,i) => {
+      const state = String(a.status||'').toLowerCase();
+      const cls = state==='active'?'om-active':state==='suspended'?'om-suspended':'om-revoked';
+      return `<tr><td><code>${a.licenseKey||'—'}</code><br><small>${a.appName||'SIRA Orange Money'}</small></td><td>${a.merchantName||'—'}</td><td><span class="om-pill ${cls}">${a.status||'—'}</span></td><td>${Number(a.deviceCount)||0} / ${Number(a.maxDevices)||1}</td><td><div class="admin-actions"><button class="btn outline-light" data-om-status="ACTIVE" data-i="${i}">Activer</button><button class="btn outline-light" data-om-status="SUSPENDED" data-i="${i}">Suspendre</button><button class="btn outline-light" data-om-status="REVOKED" data-i="${i}">Révoquer</button><button class="btn outline-light" data-om-config="${i}">Configurer</button></div></td></tr>`;
+    }).join('')}</tbody></table>`;
+    root.querySelectorAll('[data-om-status]').forEach(btn => btn.addEventListener('click', async () => {
+      try { const app = apps[Number(btn.dataset.i)]; await orangeApi('set-status','POST',{licenseKey:app.licenseKey,status:btn.dataset.omStatus}); await loadOrange(); }
+      catch(e){ $('om-created').textContent = e.message; }
+    }));
+    root.querySelectorAll('[data-om-config]').forEach(btn => btn.addEventListener('click', async () => {
+      const app = apps[Number(btn.dataset.omConfig)];
+      const name = prompt('Nom de l’application', app.appName || 'SIRA Orange Money'); if (name === null) return;
+      const theme = prompt('Couleur thème hexadécimale', '#F97316'); if (theme === null) return;
+      try { await orangeApi('configure','POST',{licenseKey:app.licenseKey,appName:name,themeColor:theme}); await loadOrange(); }
+      catch(e){ $('om-created').textContent = e.message; }
+    }));
+  }
+
+  async function loadOrange(){
+    const data = await orangeApi('overview');
+    renderOrange(data.apps || []);
+  }
+
   $('admin-login').addEventListener('click', async () => {
     const password = $('admin-password').value;
     if (!password) return status('Entrez le mot de passe administrateur.', 'error');
     auth = btoa(`${email}:${password}`);
     try {
-      const data = await request('GET');
+      const data = await contentApi('GET');
       $('news-title').value = data.content.newsTitle || '';
       $('news-text').value = data.content.newsText || '';
       $('project-title').value = data.content.projectTitle || '';
       $('project-text').value = data.content.projectText || '';
       $('editor').hidden = false;
       $('admin-password').value = '';
-      status('Connexion réussie. Vous pouvez maintenant rédiger.', 'success');
+      await loadOrange();
+      status('Connexion réussie. Le centre de contrôle est ouvert.', 'success');
     } catch (e) { auth = null; status('Connexion refusée : vérifiez le mot de passe administrateur.', 'error'); }
   });
+
   $('save-content').addEventListener('click', async () => {
     if (!auth) return status('Connectez-vous d’abord.', 'error');
-    try {
-      await request('PUT', { newsTitle: $('news-title').value, newsText: $('news-text').value, projectTitle: $('project-title').value, projectText: $('project-text').value });
-      status('Contenu enregistré et publié dans le dépôt SIRA.', 'success');
-    } catch (e) { status('Enregistrement impossible : ' + e.message, 'error'); }
+    try { await contentApi('PUT',{newsTitle:$('news-title').value,newsText:$('news-text').value,projectTitle:$('project-title').value,projectText:$('project-text').value}); status('Contenu enregistré et publié dans le dépôt SIRA.','success'); }
+    catch(e){ status('Enregistrement impossible : '+e.message,'error'); }
   });
+
+  $('om-create').addEventListener('click', async () => {
+    if (!auth) return status('Connectez-vous d’abord.','error');
+    try {
+      const expiry = $('om-expiry').value ? new Date($('om-expiry').value).toISOString() : null;
+      const data = await orangeApi('create-license','POST',{merchantName:$('om-merchant').value,appName:$('om-app').value,maxDevices:Number($('om-devices').value),expiresAt:expiry});
+      $('om-created').textContent = `Licence créée : ${data.licenseKey}`;
+      await loadOrange();
+    } catch(e){ $('om-created').textContent = 'Création impossible : '+e.message; }
+  });
+
+  $('om-send-command').addEventListener('click', async () => {
+    if (!auth) return status('Connectez-vous d’abord.','error');
+    try {
+      const command = $('om-command').value;
+      const payload = command === 'SHOW_MESSAGE' ? { message:$('om-payload').value } : {};
+      await orangeApi('command','POST',{deviceId:$('om-device').value.trim(),command,payload});
+      $('om-created').textContent = 'Commande Orange Money enregistrée.';
+      $('om-payload').value = '';
+    } catch(e){ $('om-created').textContent = 'Commande impossible : '+e.message; }
+  });
+
+  $('om-refresh').addEventListener('click', async () => { try { await loadOrange(); } catch(e){ $('om-created').textContent = e.message; } });
 })();
-</script></body></html>
+</script>
+</body>
+</html>
