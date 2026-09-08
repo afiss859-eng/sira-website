@@ -1,9 +1,10 @@
 {
   "name": "sira-website",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
     "nodemailer": "^7.0.6"
   }
 }
