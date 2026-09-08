@@ -13,7 +13,6 @@ function adminAuthorized(req) {
     return sep > 0 && decoded.slice(0, sep) === EMAIL && decoded.slice(sep + 1) === process.env.ADMIN_PASSWORD;
   } catch { return false; }
 }
-
 function hash(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
 function makeLicenseKey() {
   const raw = crypto.randomBytes(12).toString('hex').toUpperCase();
@@ -23,12 +22,31 @@ function makeApiKey(prefix='SIRA') {
   const raw = crypto.randomBytes(30).toString('base64url');
   return `${prefix}_${raw}`;
 }
+function normalizeStockModel(value) {
+  const allowed = ['BOUTIQUE', 'NATIONAL', 'INTERNATIONAL'];
+  return allowed.includes(String(value)) ? String(value) : 'BOUTIQUE';
+}
+function capabilities(model) {
+  const base = {
+    barcode: true, stock: true, sales: true, purchases: true, customers: true, suppliers: true,
+    proforma: true, offline: true, bluetoothReceipt: true,
+    multiStore: false, multiWarehouse: false, locations: false, transfers: false,
+    lots: false, serialNumbers: false, expiry: false, fifo: false, fefo: false,
+    replenishment: false, forecasting: false, international: false, multiCurrency: false, landedCost: false
+  };
+  if (model === 'NATIONAL' || model === 'INTERNATIONAL') Object.assign(base, {
+    multiStore: true, multiWarehouse: true, locations: true, transfers: true,
+    lots: true, serialNumbers: true, expiry: true, fifo: true, fefo: true,
+    replenishment: true, forecasting: true
+  });
+  if (model === 'INTERNATIONAL') Object.assign(base, { international: true, multiCurrency: true, landedCost: true });
+  return base;
+}
 function githubHeaders() {
   if (!process.env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN manquant.');
   return { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
 }
 function storeUrl() { return `https://api.github.com/repos/${REPO}/contents/${STORE_PATH}`; }
-
 async function readStore() {
   const r = await fetch(storeUrl(), { headers: githubHeaders(), cache: 'no-store' });
   if (r.status === 404) return { data: { version: 2, licenses: [], apiKeys: [] }, sha: null };
@@ -43,11 +61,7 @@ async function writeStore(data, sha, message) {
   if (!r.ok) throw new Error(`GitHub PUT ${r.status}: ${await r.text()}`);
 }
 function normalize(data) {
-  return {
-    version: 2,
-    licenses: Array.isArray(data?.licenses) ? data.licenses : [],
-    apiKeys: Array.isArray(data?.apiKeys) ? data.apiKeys : []
-  };
+  return { version: 2, licenses: Array.isArray(data?.licenses) ? data.licenses : [], apiKeys: Array.isArray(data?.apiKeys) ? data.apiKeys : [] };
 }
 
 export default async function handler(req, res) {
@@ -75,6 +89,7 @@ export default async function handler(req, res) {
         await writeStore(data, current.sha, `manager: register device ${did} on ${licenseKey}`);
       }
 
+      const stockModel = normalizeStockModel(lic.stockModel);
       return res.status(200).json({
         valid: true,
         license: {
@@ -85,6 +100,9 @@ export default async function handler(req, res) {
           usedCount: (lic.deviceIds || []).length,
           status: lic.status,
           expiresAt: lic.expiresAt || null,
+          stockModel,
+          features: capabilities(stockModel),
+          copilotModel: lic.copilotModel || process.env.SIRA_COPILOT_MODEL || 'dev-x',
           themeColor: lic.themeColor || '#007AFF',
           appName: lic.appName || 'SIRA Business',
           logoUrl: lic.logoUrl || '',
@@ -102,18 +120,41 @@ export default async function handler(req, res) {
     const data = normalize(current.data);
 
     if (req.method === 'GET') {
-      const licenses = data.licenses.map(x => ({ ...x, deviceIds: Array.isArray(x.deviceIds) ? x.deviceIds : [], commands: Array.isArray(x.commands) ? x.commands : [] }));
-      const devices = licenses.flatMap(x => (x.deviceIds || []).map(deviceId => ({ deviceId, licenseKey: x.licenseKey, merchantName: x.merchantName, shopName: x.shopName, appVersion: x.lastAppVersion || '', status: x.status, lastSeen: x.lastSeenAt || null })));
+      const licenses = data.licenses.map(x => ({ ...x, stockModel: normalizeStockModel(x.stockModel), features: capabilities(normalizeStockModel(x.stockModel)), deviceIds: Array.isArray(x.deviceIds) ? x.deviceIds : [], commands: Array.isArray(x.commands) ? x.commands : [] }));
+      const devices = licenses.flatMap(x => (x.deviceIds || []).map(deviceId => ({ deviceId, licenseKey: x.licenseKey, merchantName: x.merchantName, shopName: x.shopName, appVersion: x.lastAppVersion || '', status: x.status, stockModel: x.stockModel, lastSeen: x.lastSeenAt || null })));
       const commands = licenses.flatMap(x => (x.commands || []).map(c => ({ ...c, licenseKey: x.licenseKey })));
       const apiKeys = data.apiKeys.map(k => ({ id: k.id, label: k.label, prefix: k.prefix, scopes: k.scopes, status: k.status, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt || null }));
       return res.status(200).json({ ok: true, counts: { licenses: licenses.length, devices: devices.length, pendingCommands: commands.length, apiKeys: apiKeys.filter(k => k.status === 'ACTIVE').length }, licenses, devices, commands, apiKeys });
     }
 
     if (action === 'create-license') {
+      const stockModel = normalizeStockModel(req.body?.stockModel);
       const key = makeLicenseKey();
-      data.licenses.unshift({ licenseKey: key, merchantName: String(req.body?.merchantName || 'Commerce SIRA').slice(0, 160), shopName: String(req.body?.shopName || 'SIRA Business').slice(0, 160), status: 'ACTIVE', maxUsers: Math.max(1, Math.min(50, Number(req.body?.maxUsers) || 1)), expiresAt: req.body?.expiresAt ? new Date(req.body.expiresAt).toISOString() : null, createdAt: new Date().toISOString(), deviceIds: [], commands: [] });
-      await writeStore(data, current.sha, `manager: create license ${key}`);
-      return res.status(201).json({ ok: true, licenseKey: key });
+      data.licenses.unshift({
+        licenseKey: key,
+        merchantName: String(req.body?.merchantName || 'Commerce SIRA').slice(0, 160),
+        shopName: String(req.body?.shopName || 'SIRA Business').slice(0, 160),
+        status: 'ACTIVE',
+        stockModel,
+        copilotModel: String(req.body?.copilotModel || process.env.SIRA_COPILOT_MODEL || 'dev-x').slice(0, 80),
+        maxUsers: Math.max(1, Math.min(50, Number(req.body?.maxUsers) || 1)),
+        expiresAt: req.body?.expiresAt ? new Date(req.body.expiresAt).toISOString() : null,
+        createdAt: new Date().toISOString(),
+        deviceIds: [], commands: []
+      });
+      await writeStore(data, current.sha, `manager: create ${stockModel} license ${key}`);
+      return res.status(201).json({ ok: true, licenseKey: key, stockModel, features: capabilities(stockModel) });
+    }
+
+    if (action === 'set-license-model') {
+      const key = String(req.body?.licenseKey || '');
+      const stockModel = normalizeStockModel(req.body?.stockModel);
+      const lic = data.licenses.find(x => x.licenseKey === key);
+      if (!lic) return res.status(404).json({ ok: false, error: 'Licence introuvable.' });
+      lic.stockModel = stockModel;
+      lic.updatedAt = new Date().toISOString();
+      await writeStore(data, current.sha, `manager: set ${key} model ${stockModel}`);
+      return res.status(200).json({ ok: true, stockModel, features: capabilities(stockModel) });
     }
 
     if (action === 'set-license-status') {
