@@ -1,12 +1,10 @@
-# SIRA Manager — API et secrets
+# SIRA Manager — API, IA et secrets
 
 ## Architecture
 
-Le flux de production est : **APK SIRA Manager → HTTPS → `/api/manager/control` → stockage serveur → réponse JSON**.
+Flux de production : **APK SIRA Manager → HTTPS → Control Plane Vercel → stockage serveur → réponse JSON**.
 
-Le stockage actuellement utilisé par le Control Plane est le fichier GitHub `data/manager-control.json`. Les commandes et licences sont donc gérées côté serveur et non par le mini-serveur HTTP local Android.
-
-`api/licenses/validate` reste disponible comme route de compatibilité et délègue au Control Plane.
+Le stockage actuel des licences et clés SIRA utilise `data/manager-control.json` dans GitHub. Le mini-serveur HTTP local Android ne constitue pas l’autorité publique.
 
 ## API Control Plane
 
@@ -18,73 +16,95 @@ Body JSON :
 {"key":"SIRA-MGR-XXXX-XXXX-XXXX","deviceId":"DEV-XXXXXXXXXXXX","appVersion":"1.0.0"}
 ```
 
-Retour : `valid`, métadonnées de licence et commandes en attente.
-
 ### Administration
-`/api/manager/control` utilise une authentification HTTP Basic côté serveur.
+`/api/manager/control` utilise HTTP Basic côté serveur.
 
-Actions principales :
-- `GET ?action=overview`
-- `POST ?action=create-license`
-- `POST ?action=set-license-status`
-- `POST ?action=command`
-- `POST ?action=create-api-key`
-- `POST ?action=revoke-api-key`
+Actions : `overview`, `create-license`, `set-license-status`, `command`, `create-api-key`, `revoke-api-key`.
 
-Les clés SIRA générées par `create-api-key` sont stockées sous forme de hash SHA-256 ; la valeur brute n’est retournée qu’une seule fois lors de la création.
+Les clés SIRA internes sont générées côté serveur, stockées sous hash SHA-256 et affichées en clair uniquement lors de leur création.
 
-### État des fournisseurs
+### Diagnostic des fournisseurs
 `GET /api/manager/providers`
 
-Retourne uniquement `configured: true/false` et la liste des variables manquantes. **Aucun secret n’est renvoyé.**
+Retourne seulement `configured` et `missing`. Aucun secret n’est exposé.
 
-## Variables Vercel
+## Moteur IA compatible OpenAI
 
-### Administration et stockage
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
-- `GITHUB_TOKEN`
+SIRA peut utiliser le service fourni par l’utilisateur :
 
-### IA
-- `OPENAI_API_KEY`
+`https://aimodelapi.onrender.com/v1`
 
-### CinetPay
-- `CINETPAY_API_KEY`
-- `CINETPAY_SITE_ID`
+Variables Vercel recommandées :
+- `AI_MODEL_API_KEY` : clé fournie par le service AI Model API
+- `AI_MODEL_BASE_URL` : optionnelle ; par défaut `https://aimodelapi.onrender.com/v1`
 
-### PayDunya
-- `PAYDUNYA_MASTER_KEY`
-- `PAYDUNYA_PRIVATE_KEY`
-- `PAYDUNYA_PUBLIC_KEY`
-- `PAYDUNYA_TOKEN`
+OpenAI officiel est **optionnel** pour cette architecture. `OPENAI_API_KEY` n’est pas nécessaire pour utiliser le service compatible OpenAI.
 
-### Opérateurs Mobile Money
-Les noms exacts des identifiants doivent suivre les contrats/API réellement fournis lors de l’onboarding de chaque opérateur. Ne jamais inventer ou hardcoder des credentials.
+### Proxy IA SIRA
+`GET /api/manager/ai` récupère la liste des modèles depuis `/v1/models`.
 
-## Règles de sécurité
+`POST /api/manager/ai` avec :
+```json
+{"type":"chat","model":"dev-x","messages":[{"role":"user","content":"Bonjour"}]}
+```
 
-Les secrets fournisseurs restent uniquement dans les variables d’environnement Vercel et ne doivent jamais être placés dans l’APK, dans HTML/JavaScript public, dans `vercel.json` ou dans le dépôt Git.
+Pour une image :
+```json
+{"type":"image","model":"image-gen","prompt":"Visuel professionnel pour une facture SIRA"}
+```
 
-Le endpoint `/api/manager/providers` ne révèle jamais les valeurs des variables. Il sert uniquement au diagnostic de configuration.
+Le navigateur et l’APK ne reçoivent pas `AI_MODEL_API_KEY`.
 
-Les clés PayDunya sont délivrées depuis une application PayDunya Business active ; la documentation officielle indique notamment `PAYDUNYA_MASTER_KEY`, `PAYDUNYA_PRIVATE_KEY`, `PAYDUNYA_PUBLIC_KEY` et `PAYDUNYA_TOKEN` pour la configuration Node.js. Voir : https://developers.paydunya.com/doc/FR/NodeJS
+### Modèle actif
+`GET/POST /api/manager/ai-config` gère le modèle sélectionné par l’administration. La sélection est conservée côté serveur dans `data/manager-ai.json`.
 
-Les clés CinetPay doivent être récupérées depuis le compte marchand CinetPay et configurées côté serveur après validation de l’intégration.
+Modèles attendus d’après la documentation fournie : `dev-x`, `gpt-oss-120b`, `llama-3.3-70b-instruct`, `gpt-5-nano`, `gemini-2.5-flash-lite`, `qwen3-30b-a3b`, `deepseek-r1`, `mistral`, `kimi-k2p5`, `kimi-k2-thinking`, `grok-3-mini`, `grok-3`, `grok-4`, plus `image-gen`, `qwen-max-image` et `gemini-flash-image` pour la génération d’images.
 
-## État actuel
+## Factures proforma
 
-✅ Génération de licences côté serveur
+`POST /api/manager/proforma` génère une facture proforma HTML imprimable en PDF depuis le navigateur.
 
-✅ Validation distante des licences par l’APK
+Fonctions :
+- calcul du sous-total, taxes et total en FCFA ;
+- identité vendeur/client ;
+- lignes d’articles ;
+- numéro et date ;
+- génération optionnelle d’un visuel via le moteur image configuré ;
+- retour de `html`, `total` et `imageUrl`.
 
-✅ Commandes `LOCK_APP`, `FORCE_SYNC`, `SHOW_MESSAGE`
+Le document retourné porte clairement la mention **Document proforma — non constitutif d’une facture définitive**.
 
-✅ Génération et révocation de clés API SIRA
+## Paiements
 
-✅ Endpoint de diagnostic des fournisseurs sans exposition de secrets
+Variables prévues pour les intégrations marchandes :
+- CinetPay : `CINETPAY_API_KEY`, `CINETPAY_SITE_ID`
+- PayDunya : `PAYDUNYA_MASTER_KEY`, `PAYDUNYA_PRIVATE_KEY`, `PAYDUNYA_PUBLIC_KEY`, `PAYDUNYA_TOKEN`
+- Opérateurs : credentials à définir selon les contrats réellement délivrés lors de l’onboarding.
 
-🟡 Credentials fournisseurs réels : à renseigner dans Vercel après obtention auprès des fournisseurs
+## Sécurité
 
-🟡 Ack/consommation atomique des commandes : à renforcer pour éviter qu’une commande reste rejouée plusieurs fois
+Aucune clé fournisseur ne doit être hardcodée dans l’APK, HTML, JavaScript public, `vercel.json` ou le dépôt Git. Les secrets restent côté Vercel.
 
-🟡 Migration du stockage GitHub vers une base transactionnelle si le volume/concurrence augmente
+## État
+
+✅ Contrôle licences serveur
+
+✅ Validation distante APK
+
+✅ Commandes distantes
+
+✅ Génération/révocation de clés API SIRA
+
+✅ Sélection persistante du modèle IA
+
+✅ Proxy chat compatible OpenAI
+
+✅ Proxy génération d’images
+
+✅ Générateur de factures proforma
+
+🟡 Clé réelle `AI_MODEL_API_KEY` : à placer dans les variables Vercel
+
+🟡 Credentials paiement : à renseigner après onboarding fournisseur
+
+🟡 Ack atomique des commandes et migration future vers base transactionnelle à renforcer avec la montée en charge
