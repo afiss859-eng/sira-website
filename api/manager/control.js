@@ -19,6 +19,10 @@ function makeLicenseKey() {
   const raw = crypto.randomBytes(12).toString('hex').toUpperCase();
   return `SIRA-MGR-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
 }
+function makeApiKey(prefix='SIRA') {
+  const raw = crypto.randomBytes(30).toString('base64url');
+  return `${prefix}_${raw}`;
+}
 function githubHeaders() {
   if (!process.env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN manquant.');
   return { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
@@ -27,7 +31,7 @@ function storeUrl() { return `https://api.github.com/repos/${REPO}/contents/${ST
 
 async function readStore() {
   const r = await fetch(storeUrl(), { headers: githubHeaders(), cache: 'no-store' });
-  if (r.status === 404) return { data: { version: 1, licenses: [] }, sha: null };
+  if (r.status === 404) return { data: { version: 2, licenses: [], apiKeys: [] }, sha: null };
   if (!r.ok) throw new Error(`GitHub GET ${r.status}`);
   const file = await r.json();
   return { data: JSON.parse(Buffer.from(file.content, 'base64').toString('utf8')), sha: file.sha };
@@ -38,14 +42,18 @@ async function writeStore(data, sha, message) {
   const r = await fetch(storeUrl(), { method: 'PUT', headers: { ...githubHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`GitHub PUT ${r.status}: ${await r.text()}`);
 }
-function normalize(data) { return { version: 1, licenses: Array.isArray(data?.licenses) ? data.licenses : [] }; }
+function normalize(data) {
+  return {
+    version: 2,
+    licenses: Array.isArray(data?.licenses) ? data.licenses : [],
+    apiKeys: Array.isArray(data?.apiKeys) ? data.apiKeys : []
+  };
+}
 
 export default async function handler(req, res) {
   try {
     const action = String(req.query?.action || 'overview');
 
-    // Endpoint used by the APK. Only the licence key and device id are needed;
-    // administrator credentials never enter the Android app.
     if (action === 'validate' && req.method === 'POST') {
       const { key, deviceId, appVersion } = req.body || {};
       const licenseKey = String(key || '').trim();
@@ -97,7 +105,8 @@ export default async function handler(req, res) {
       const licenses = data.licenses.map(x => ({ ...x, deviceIds: Array.isArray(x.deviceIds) ? x.deviceIds : [], commands: Array.isArray(x.commands) ? x.commands : [] }));
       const devices = licenses.flatMap(x => (x.deviceIds || []).map(deviceId => ({ deviceId, licenseKey: x.licenseKey, merchantName: x.merchantName, shopName: x.shopName, appVersion: x.lastAppVersion || '', status: x.status, lastSeen: x.lastSeenAt || null })));
       const commands = licenses.flatMap(x => (x.commands || []).map(c => ({ ...c, licenseKey: x.licenseKey })));
-      return res.status(200).json({ ok: true, counts: { licenses: licenses.length, devices: devices.length, pendingCommands: commands.length }, licenses, devices, commands });
+      const apiKeys = data.apiKeys.map(k => ({ id: k.id, label: k.label, prefix: k.prefix, scopes: k.scopes, status: k.status, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt || null }));
+      return res.status(200).json({ ok: true, counts: { licenses: licenses.length, devices: devices.length, pendingCommands: commands.length, apiKeys: apiKeys.filter(k => k.status === 'ACTIVE').length }, licenses, devices, commands, apiKeys });
     }
 
     if (action === 'create-license') {
@@ -128,6 +137,26 @@ export default async function handler(req, res) {
       if (command === 'LOCK_APP') lic.status = 'SUSPENDED';
       await writeStore(data, current.sha, `manager: ${command} for ${deviceId}`);
       return res.status(201).json({ ok: true });
+    }
+
+    if (action === 'create-api-key') {
+      const key = makeApiKey('SIRA');
+      const label = String(req.body?.label || 'SIRA Manager').slice(0, 120);
+      const scopes = Array.isArray(req.body?.scopes) ? req.body.scopes.filter(Boolean).slice(0, 20) : ['manager:read'];
+      const id = crypto.randomBytes(8).toString('hex');
+      data.apiKeys.unshift({ id, label, prefix: key.slice(0, 12), keyHash: hash(key), scopes, status: 'ACTIVE', createdAt: new Date().toISOString(), lastUsedAt: null });
+      await writeStore(data, current.sha, `manager: create api key ${label}`);
+      return res.status(201).json({ ok: true, apiKey: key, id, label, scopes, warning: 'Cette clé est affichée une seule fois. Conservez-la dans un coffre de secrets.' });
+    }
+
+    if (action === 'revoke-api-key') {
+      const id = String(req.body?.id || '');
+      const item = data.apiKeys.find(x => x.id === id);
+      if (!item) return res.status(404).json({ ok: false, error: 'Clé API introuvable.' });
+      item.status = 'REVOKED';
+      item.revokedAt = new Date().toISOString();
+      await writeStore(data, current.sha, `manager: revoke api key ${id}`);
+      return res.status(200).json({ ok: true });
     }
 
     return res.status(400).json({ ok: false, error: 'Action inconnue.' });
