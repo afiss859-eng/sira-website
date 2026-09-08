@@ -1,5 +1,6 @@
 const PROVIDERS = [
-  { id: 'openai', label: 'OpenAI', env: ['OPENAI_API_KEY'] },
+  { id: 'ai-model-api', label: 'AI Model API (compatible OpenAI)', env: ['AI_MODEL_API_KEY'] },
+  { id: 'openai', label: 'OpenAI officiel (optionnel)', env: ['OPENAI_API_KEY'] },
   { id: 'cinetpay', label: 'CinetPay', env: ['CINETPAY_API_KEY', 'CINETPAY_SITE_ID'] },
   { id: 'paydunya', label: 'PayDunya', env: ['PAYDUNYA_MASTER_KEY', 'PAYDUNYA_PRIVATE_KEY', 'PAYDUNYA_PUBLIC_KEY', 'PAYDUNYA_TOKEN'] },
   { id: 'orange', label: 'Orange Money', env: ['ORANGE_MONEY_CLIENT_ID', 'ORANGE_MONEY_CLIENT_SECRET'] },
