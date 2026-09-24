@@ -1,60 +1,107 @@
 (() => {
   'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  $$('[data-year]').forEach(el => el.textContent = new Date().getFullYear());
+
+  const toast = $('#toast');
+  let toastTimer;
+  const showToast = message => {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+  };
+
+  const stories = {
+    hero: {title:'Le Burkina Faso au cœur de l’actualité nationale et régionale', category:'BURKINA FASO'},
+    transition: {title:'Transition : cap sur la souveraineté et le développement durable', category:'BURKINA FASO'},
+    ua: {title:'Afrique : les dirigeants multiplient les échanges autour des priorités régionales', category:'AFRIQUE'},
+    economie: {title:'Croissance économique : les perspectives régionales au centre des débats', category:'ÉCONOMIE'},
+    culture: {title:'Culture : le cinéma africain met en lumière créativité et innovation', category:'CULTURE'},
+    edu: {title:'Éducation : de nouvelles infrastructures renforcent l’offre scolaire', category:'SOCIÉTÉ'},
+    sport: {title:'Football : les regards tournés vers les prochaines échéances', category:'SPORT'},
+    tech: {title:'Innovation : de jeunes Burkinabè développent des solutions numériques', category:'TECH'}
+  };
+
+  $$('[data-story]').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.story;
+      if (id && stories[id]) {
+        location.href = `article.html?story=${encodeURIComponent(id)}`;
+      }
+    });
+  });
 
   const menuToggle = $('.menu-toggle');
-  const nav = $('.nav');
-  const closeMenu = () => { if (!menuToggle || !nav) return; nav.classList.remove('open'); menuToggle.setAttribute('aria-expanded', 'false'); menuToggle.setAttribute('aria-label', 'Ouvrir le menu'); menuToggle.textContent = '☰'; };
-  if (menuToggle && nav) {
-    menuToggle.addEventListener('click', () => { const open = !nav.classList.contains('open'); nav.classList.toggle('open', open); menuToggle.setAttribute('aria-expanded', String(open)); menuToggle.setAttribute('aria-label', open ? 'Fermer le menu' : 'Ouvrir le menu'); menuToggle.textContent = open ? '×' : '☰'; });
-    $$('.nav a').forEach(link => link.addEventListener('click', closeMenu));
-    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenu(); });
-    document.addEventListener('click', event => { if (nav.classList.contains('open') && !nav.contains(event.target) && event.target !== menuToggle) closeMenu(); });
-  }
-  $$('[data-year]').forEach(el => { el.textContent = new Date().getFullYear(); });
-
-  const observer = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); } }), { threshold: 0.12 }) : null;
-  $$('.section:not(.hero), .cards article, .project-card, .news-grid article, .impact-list div').forEach(element => { element.classList.add('reveal'); if (observer) observer.observe(element); else element.classList.add('visible'); });
-
-  const showFormMessage = (form, message, type = 'info') => { const note = $('.form-note', form); if (note) { note.textContent = message; note.dataset.state = type; } };
-
-  async function sendRequest(form, payload) {
-    try {
-      const response = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) throw new Error(result.error || 'Erreur serveur');
-      showFormMessage(form, 'Votre demande a bien été envoyée à SIRA. Vous pouvez répondre au message depuis votre adresse e-mail.', 'success');
-      form.reset();
-      return true;
-    } catch (error) {
-      console.error('SIRA form error:', error);
-      const message = error?.message || '';
-      if (message.includes('messagerie') || message.includes('configurée')) {
-        showFormMessage(form, 'L’envoi e-mail n’est pas encore activé sur le serveur SIRA. Aucun envoi n’a été effectué. Veuillez réessayer après la configuration de la messagerie.', 'error');
-      } else {
-        showFormMessage(form, 'Impossible d’envoyer la demande pour le moment. Veuillez réessayer.', 'error');
-      }
-      return false;
-    }
+  const mobileLinks = $$('.main-nav a');
+  if (menuToggle) {
+    menuToggle.addEventListener('click', () => {
+      const current = document.body.classList.toggle('mobile-nav-open');
+      menuToggle.setAttribute('aria-expanded', String(current));
+      menuToggle.textContent = current ? '×' : '☰';
+      const nav = $('.main-nav');
+      if (nav) nav.style.display = current ? 'block' : '';
+    });
+    mobileLinks.forEach(link => link.addEventListener('click', () => {
+      document.body.classList.remove('mobile-nav-open');
+      menuToggle.setAttribute('aria-expanded', 'false');
+      menuToggle.textContent = '☰';
+      const nav = $('.main-nav');
+      if (nav && window.innerWidth <= 680) nav.style.display = '';
+    }));
   }
 
-  const contact = $('#contact-form');
-  if (contact) contact.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (!contact.checkValidity()) return contact.reportValidity();
-    const data = Object.fromEntries(new FormData(contact).entries());
-    await sendRequest(contact, data);
+  const searchInput = $('#site-search');
+  const searchButton = $('#search-button');
+  const doSearch = () => {
+    const q = (searchInput?.value || '').trim();
+    if (!q) return showToast('Écrivez un mot-clé à rechercher.');
+    const match = Object.entries(stories).find(([, s]) => (s.title + ' ' + s.category).toLowerCase().includes(q.toLowerCase()));
+    location.href = `article.html?q=${encodeURIComponent(q)}${match ? `&story=${encodeURIComponent(match[0])}` : ''}`;
+  };
+  searchButton?.addEventListener('click', doSearch);
+  searchInput?.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  $('#newsletter-form')?.addEventListener('submit', e => {
+    e.preventDefault();
+    const email = new FormData(e.currentTarget).get('email');
+    if (!email) return;
+    localStorage.setItem('sira_newsletter_email', String(email));
+    e.currentTarget.reset();
+    showToast('Merci. Votre demande d’abonnement a été enregistrée pour la démo.');
   });
 
-  const join = $('#join-form');
-  if (join) join.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (!join.checkValidity()) return join.reportValidity();
-    const data = Object.fromEntries(new FormData(join).entries());
-    await sendRequest(join, { ...data, subject: `Demande d’adhésion — ${data.profile || 'Participation'}`, message: `Profil : ${data.profile || ''}\nTéléphone : ${data.phone || ''}\n\nCompétences / motivation :\n${data.message || ''}` });
-  });
+  const modal = $('#player-modal');
+  const title = $('#player-title');
+  const copy = $('#player-copy');
+  const action = $('#player-action');
+  const openPlayer = kind => {
+    if (!modal) return;
+    const isTV = kind === 'tv';
+    title.textContent = isTV ? 'SIRA TV' : 'SIRA FM 88.0';
+    copy.textContent = isTV
+      ? 'Lecteur vidéo de démonstration : branchez le flux ou le lecteur réel lorsque SIRA TV est configurée.'
+      : 'Lecteur radio de démonstration : branchez l’URL du flux audio lorsque SIRA FM est configurée.';
+    action.textContent = isTV ? '▶ Ouvrir le direct' : '▶ Lancer la radio';
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  };
+  const closePlayer = () => {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  };
+  $$('[data-player]').forEach(el => el.addEventListener('click', () => openPlayer(el.dataset.player)));
+  $$('[data-close-player]').forEach(el => el.addEventListener('click', closePlayer));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+  action?.addEventListener('click', () => showToast('Le flux réel sera branché ici lors de la configuration du direct.'));
 
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  const time = $('#breaking-time');
+  if (time) {
+    const minutes = 1;
+    time.textContent = `il y a ${minutes} min`;
+  }
 })();
