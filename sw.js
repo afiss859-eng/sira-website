@@ -1,9 +1,12 @@
-const CACHE = 'sira-v3';
+const CACHE = 'sira-v4';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './article.html',
+  './article.js',
+  './about.html',
   './manifest.webmanifest',
   './assets/sira-logo.svg',
   './join.html',
@@ -37,12 +40,8 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
-
       return fetch(event.request).then(response => {
-        if (!response || response.status !== 200 || response.type === 'opaque') {
-          return response;
-        }
-
+        if (!response || response.status !== 200 || response.type === 'opaque') return response;
         const copy = response.clone();
         caches.open(CACHE).then(cache => cache.put(event.request, copy));
         return response;
