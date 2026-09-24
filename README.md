@@ -1,38 +1,26 @@
-# SIRA — Site officiel
+# SIRA — Portail média
 
-Site institutionnel responsive de l’association SIRA — **« Chemin d’aujourd’hui, avenir de demain »**.
+SIRA est maintenant présenté comme un portail d'actualités responsive inspiré de la maquette fournie : Burkina Faso, Afrique, International, Économie, Société, Sport, Culture, Tech, Vidéos, Podcasts, SIRA FM et SIRA TV.
 
-## État actuel
-- Accueil institutionnel complet, responsive mobile / tablette / ordinateur
-- Identité visuelle SIRA intégrée à partir du logo officiel SVG
-- Navigation mobile accessible
-- Sections : présentation, domaines d’action, projets, impact, actualités, participation, contact et FAQ
-- Page d’adhésion / participation
-- Tableau de bord local de démonstration
-- Pages confidentialité et mentions légales préparatoires
-- Manifest PWA + service worker de cache
-- Workflow GitHub Pages
-- Métadonnées SEO de base
+## Version actuelle
+- Accueil média responsive PC / tablette / mobile
+- Barre Flash Info
+- Une principale + fil d'actualités
+- Rubriques et cartes de contenu
+- Blocs SIRA FM / SIRA TV avec lecteurs de démonstration
+- Newsletter avec stockage local de démonstration
+- Recherche vers le modèle de lecture d'article
+- article.html + article.js pour les pages d'articles
+- about.html pour la présentation
+- PWA + service worker avec nouveau cache
 
-## Arborescence
-- `index.html` — accueil institutionnel
-- `join.html` — adhésion / participation
-- `admin.html` — tableau de bord local de test
-- `styles.css` — design responsive et composants
-- `app.js` — navigation, animations, validation et stockage local de prototype
-- `assets/sira-logo.svg` — logo officiel SIRA
-- `privacy.html` — confidentialité préparatoire
-- `legal.html` — mentions légales préparatoires
-- `404.html` — page introuvable
-- `manifest.webmanifest` — PWA
-- `sw.js` — cache offline de base
-- `.github/workflows/pages.yml` — publication GitHub Pages
+## Important
+Les articles, chiffres de vues et compteurs sociaux présents dans la maquette sont des contenus de démonstration. Ils doivent être remplacés par les contenus éditoriaux validés avant mise en production.
 
-## Données et sécurité
-Les coordonnées, dirigeants, projets, partenaires, moyens de don et autres informations institutionnelles non fournis par SIRA ne sont pas inventés. Les formulaires actuels utilisent `localStorage` uniquement pour démontrer le parcours frontend. **Ils ne constituent pas encore une base de données sécurisée et ne doivent pas servir à collecter des données sensibles en production.**
+Les lecteurs FM/TV sont également des démonstrations frontend. Les vrais flux audio/vidéo pourront être branchés lorsque les URLs de diffusion seront disponibles.
 
-## Mise en production prévue
-La prochaine couche technique devra fournir une API sécurisée, une vraie base de données, une authentification administrateur avec rôles, un stockage des médias, la messagerie transactionnelle, la gestion des projets/actualités/événements, des journaux d’activité et un module de dons après validation des moyens de paiement de SIRA.
+## Architecture prévue pour la production
+La prochaine étape consiste à connecter une API/CMS sécurisé, une base de données, l'authentification avec rôles, le stockage des médias, la messagerie transactionnelle, la gestion des actualités, catégories, vidéos, podcasts, directs, commentaires et journaux d'activité.
 
 ## Déploiement
-Le workflow GitHub Pages est présent. Dans GitHub : **Settings → Pages → Source: GitHub Actions**. Les changements poussés sur `main` peuvent ensuite être publiés automatiquement par le workflow.
+Le dépôt contient un workflow GitHub Pages qui se déclenche sur main.
